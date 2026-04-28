@@ -1,3 +1,6 @@
 {"type": "collection_run", "run_id": "e2e-run", "started_at": "2026-04-27T03:00:00+09:00", "finished_at": "2026-04-27T03:01:00+09:00"}
-{"type": "source_result", "run_id": "e2e-run", "source_id": "newsapi", "status": "fetched_metadata", "collected_records": 2, "finished_at": "2026-04-27T03:01:00+09:00", "message": "Fetched metadata only."}
+{"type": "source_result", "run_id": "e2e-run", "source_id": "newsapi", "status": "fetched_metadata", "collected_records": 1, "finished_at": "2026-04-27T03:01:00+09:00", "message": "Fetched metadata only."}
+{"type": "source_result", "run_id": "e2e-run", "source_id": "nytimes", "status": "fetched_metadata", "collected_records": 1, "finished_at": "2026-04-27T03:01:00+09:00", "message": "Fetched metadata only."}
 {"type": "source_result", "run_id": "e2e-run", "source_id": "eia", "status": "fetched_energy_series", "collected_records": 1, "finished_at": "2026-04-27T03:01:00+09:00", "message": "Fetched EIA official energy series."}
+{"type": "source_result", "run_id": "e2e-run", "source_id": "ecos", "status": "fetched_statistics", "collected_records": 1, "finished_at": "2026-04-27T03:01:00+09:00", "message": "Fetched ECOS official statistics."}
+{"type": "source_result", "run_id": "e2e-run", "source_id": "guardian", "status": "planned_non_mvp", "collected_records": 0, "finished_at": "2026-04-27T03:01:00+09:00", "message": "Outside MVP scope."}

@@ -13,20 +13,35 @@ from content_research.sources.copyright import decide_storage, lookup_source_rig
 
 NEWS_SOURCE_IDS = frozenset({"naver_news", "newsapi", "nytimes"})
 OFFICIAL_DATA_SOURCE_IDS = frozenset({"ecos", "eia", "fred", "kosis", "opendart", "un_comtrade"})
+MVP_EVIDENCE_SOURCE_IDS = NEWS_SOURCE_IDS | OFFICIAL_DATA_SOURCE_IDS
+NON_EVIDENCE_STATUSES = frozenset(
+    {
+        "planned",
+        "planned_non_mvp",
+        "skipped",
+        "missing_credentials",
+        "missing_handler",
+        "error",
+    }
+)
 
 
 @dataclass(frozen=True)
 class EvidenceCandidate:
     source_id: str | None
+    source_name: str | None
     publisher_or_institution: str | None
     title_or_indicator: str | None
     url: str | None
     published_or_observed_at: str | None
+    collected_at: str | None
+    accessed_at: str | None
     value: str | None
     unit: str | None
     snippet: str | None
     rights_status: dict[str, Any]
     confidence: float
+    field_status: dict[str, str]
     evidence_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -50,7 +65,7 @@ def normalize_jsonl_lines(lines: Iterable[str]) -> list[EvidenceCandidate]:
             record = json.loads(line)
         except json.JSONDecodeError:
             continue
-        if isinstance(record, dict):
+        if isinstance(record, dict) and _is_evidence_input_record(record):
             candidates.append(normalize_record(record))
     return candidates
 
@@ -69,17 +84,30 @@ def normalize_record(record: dict[str, Any]) -> EvidenceCandidate:
 
     return EvidenceCandidate(
         source_id=source_id,
+        source_name=_source_name(record),
         publisher_or_institution=_publisher_or_institution(record),
         title_or_indicator=_title_or_indicator(record),
         url=_url(record),
         published_or_observed_at=_published_or_observed_at(record),
+        collected_at=_collected_at(record),
+        accessed_at=_accessed_at(record),
         value=_value(record),
         unit=_unit(record),
         snippet=_snippet(record),
         rights_status=rights_status,
         confidence=_confidence(record, rights_status),
+        field_status=_field_status(record),
         evidence_id=_evidence_id(record),
     )
+
+
+def _is_evidence_input_record(record: dict[str, Any]) -> bool:
+    if _as_str(record.get("type")) in {"collection_run", "source_result"}:
+        return False
+    if _as_str(record.get("status")) in NON_EVIDENCE_STATUSES:
+        return False
+    source_id = _as_str(record.get("source_id"))
+    return source_id in MVP_EVIDENCE_SOURCE_IDS
 
 
 def _rights_status(record: dict[str, Any]) -> dict[str, Any]:
@@ -98,7 +126,7 @@ def _rights_status(record: dict[str, Any]) -> dict[str, Any]:
 def _publisher_or_institution(record: dict[str, Any]) -> str | None:
     source_id = _as_str(record.get("source_id"))
     if source_id == "newsapi":
-        return _first_present(record, "source_name", "source_api_id")
+        return _first_present(record, "source_name", "source_api_id") or None
     if source_id == "nytimes":
         return "The New York Times"
     if source_id == "naver_news":
@@ -116,6 +144,20 @@ def _publisher_or_institution(record: dict[str, Any]) -> str | None:
     if source_id == "opendart":
         return "OpenDART"
     return _first_present(record, "publisher", "institution", "source_name") or None
+
+
+def _source_name(record: dict[str, Any]) -> str | None:
+    return (
+        _first_present(
+            record,
+            "source_name",
+            "publisher",
+            "institution",
+            "source_api_id",
+        )
+        or _publisher_or_institution(record)
+        or None
+    )
 
 
 def _title_or_indicator(record: dict[str, Any]) -> str | None:
@@ -182,6 +224,33 @@ def _published_or_observed_at(record: dict[str, Any]) -> str | None:
     )
 
 
+def _collected_at(record: dict[str, Any]) -> str | None:
+    return (
+        _first_present(
+            record,
+            "collected_at",
+            "retrieved_at",
+            "fetched_at",
+            "created_at",
+        )
+        or None
+    )
+
+
+def _accessed_at(record: dict[str, Any]) -> str | None:
+    return (
+        _first_present(
+            record,
+            "accessed_at",
+            "last_accessed_at",
+            "retrieved_at",
+            "fetched_at",
+            "collected_at",
+        )
+        or None
+    )
+
+
 def _value(record: dict[str, Any]) -> str | None:
     source_id = _as_str(record.get("source_id"))
     if source_id == "un_comtrade":
@@ -231,6 +300,38 @@ def _confidence(record: dict[str, Any], rights_status: dict[str, Any]) -> float:
 
 def _evidence_id(record: dict[str, Any]) -> str | None:
     return _none_if_missing(record.get("evidence_id"))
+
+
+def _field_status(record: dict[str, Any]) -> dict[str, str]:
+    source_id = _as_str(record.get("source_id"))
+    values = {
+        "issue_title": _title_or_indicator(record),
+        "published_or_observed_at": _published_or_observed_at(record),
+        "source_name": _source_name(record),
+        "source_url": _url(record),
+        "collected_at": _collected_at(record),
+        "accessed_at": _accessed_at(record),
+        "key_number": _value(record),
+        "unit": _unit(record),
+        "snippet_or_context": _snippet(record),
+    }
+    optional_by_source = {
+        "key_number": source_id in NEWS_SOURCE_IDS,
+        "unit": source_id in NEWS_SOURCE_IDS,
+        "snippet_or_context": source_id in OFFICIAL_DATA_SOURCE_IDS,
+    }
+    return {
+        field: _status_for(value, unsupported=optional_by_source.get(field, False))
+        for field, value in values.items()
+    }
+
+
+def _status_for(value: str | None, *, unsupported: bool = False) -> str:
+    if value:
+        return "present"
+    if unsupported:
+        return "unsupported"
+    return "missing"
 
 
 def _domain_for_rights(record: dict[str, Any]) -> str:

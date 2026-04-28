@@ -15,7 +15,7 @@ import time
 from typing import Any, Callable, Iterable
 from zoneinfo import ZoneInfo
 
-from content_research.collection.catalog import CollectionSource, DEFAULT_COLLECTION_SOURCES
+from content_research.collection.catalog import CollectionSource, DEFAULT_COLLECTION_SOURCES, MVP_COLLECTION_SOURCE_IDS
 from content_research.sources.official_data.ecos import ECOSApiError, ECOSClient
 from content_research.sources.official_data.eia import EIAApiError, EIAClient
 from content_research.sources.official_data.fred import FREDApiError, FREDClient
@@ -35,6 +35,7 @@ KOSIS_ROOT_PARENT_ID = ""
 ECOS_KEY_STAT_START = 1
 ECOS_KEY_STAT_END = 100
 ECOS_KEY_STAT_LANGUAGE = "kr"
+IMPLEMENTED_COLLECTION_HANDLER_IDS = MVP_COLLECTION_SOURCE_IDS
 
 
 @dataclass(frozen=True)
@@ -220,6 +221,14 @@ class HourlyCollectionProcess:
                 message="Source disabled in catalog.",
             )
 
+        if source.source_id not in MVP_COLLECTION_SOURCE_IDS:
+            return self._source_result(
+                source,
+                status="planned_non_mvp",
+                rights_gate_status="not_checked",
+                message="Source is outside the MVP collection scope; no adapter is run and no Evidence records are produced.",
+            )
+
         handlers: dict[str, Callable[[CollectionSource, Path], CollectionSourceResult]] = {
             "naver_news": self._collect_naver_news,
             "newsapi": self._collect_newsapi,
@@ -235,12 +244,11 @@ class HourlyCollectionProcess:
         if handler is not None:
             return handler(source, run_dir)
 
-        rights_gate_status = "metadata_only" if source.default_body_tier == 0 else "body_allowed_by_source_tier"
         return self._source_result(
             source,
-            status="planned",
-            rights_gate_status=rights_gate_status,
-            message="Adapter placeholder planned; no network request executed in MVP scheduler.",
+            status="missing_handler",
+            rights_gate_status="not_checked",
+            message="Source is in MVP scope but has no collection handler; this must be fixed before MVP completion.",
         )
 
     @staticmethod

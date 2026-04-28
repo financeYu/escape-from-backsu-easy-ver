@@ -6,6 +6,21 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 
+MVP_COLLECTION_SOURCE_IDS = frozenset(
+    {
+        "naver_news",
+        "newsapi",
+        "nytimes",
+        "ecos",
+        "kosis",
+        "opendart",
+        "fred",
+        "eia",
+        "un_comtrade",
+    }
+)
+
+
 @dataclass(frozen=True)
 class CollectionSource:
     source_id: str
@@ -28,7 +43,7 @@ DEFAULT_COLLECTION_SOURCES: tuple[CollectionSource, ...] = (
         source_id="naver_news",
         display_name="Naver News Search API",
         category="korean_news_discovery",
-        adapter="news_discovery.naver_news",
+        adapter="content_research.sources.news_discovery.naver_news",
         access_method="api",
         default_body_tier=0,
         priority=10,
@@ -68,7 +83,7 @@ DEFAULT_COLLECTION_SOURCES: tuple[CollectionSource, ...] = (
         source_id="newsapi",
         display_name="NewsAPI",
         category="international_news_discovery",
-        adapter="news_discovery.newsapi",
+        adapter="content_research.sources.news_discovery.newsapi",
         access_method="api",
         default_body_tier=0,
         priority=25,
@@ -78,7 +93,7 @@ DEFAULT_COLLECTION_SOURCES: tuple[CollectionSource, ...] = (
         source_id="nytimes",
         display_name="The New York Times",
         category="international_publisher",
-        adapter="news_discovery.nytimes",
+        adapter="content_research.sources.news_discovery.nytimes",
         access_method="api",
         default_body_tier=0,
         priority=20,
@@ -278,7 +293,7 @@ DEFAULT_COLLECTION_SOURCES: tuple[CollectionSource, ...] = (
         source_id="ecos",
         display_name="Bank of Korea ECOS",
         category="korean_official_data",
-        adapter="official_data.ecos",
+        adapter="content_research.sources.official_data.ecos",
         access_method="api",
         default_body_tier=3,
         priority=10,
@@ -288,7 +303,7 @@ DEFAULT_COLLECTION_SOURCES: tuple[CollectionSource, ...] = (
         source_id="kosis",
         display_name="KOSIS OpenAPI",
         category="korean_official_data",
-        adapter="official_data.kosis",
+        adapter="content_research.sources.official_data.kosis",
         access_method="api",
         default_body_tier=3,
         priority=10,
@@ -298,7 +313,7 @@ DEFAULT_COLLECTION_SOURCES: tuple[CollectionSource, ...] = (
         source_id="opendart",
         display_name="OpenDART",
         category="korean_filing_data",
-        adapter="official_data.opendart",
+        adapter="content_research.sources.official_data.opendart",
         access_method="api",
         default_body_tier=3,
         priority=20,
@@ -338,7 +353,7 @@ DEFAULT_COLLECTION_SOURCES: tuple[CollectionSource, ...] = (
         source_id="fred",
         display_name="FRED API",
         category="us_official_data",
-        adapter="official_data.fred",
+        adapter="content_research.sources.official_data.fred",
         access_method="api",
         default_body_tier=3,
         priority=25,
@@ -348,7 +363,7 @@ DEFAULT_COLLECTION_SOURCES: tuple[CollectionSource, ...] = (
         source_id="eia",
         display_name="U.S. Energy Information Administration API",
         category="us_energy_data",
-        adapter="official_data.eia",
+        adapter="content_research.sources.official_data.eia",
         access_method="api",
         default_body_tier=3,
         priority=25,
@@ -358,7 +373,7 @@ DEFAULT_COLLECTION_SOURCES: tuple[CollectionSource, ...] = (
         source_id="un_comtrade",
         display_name="UN Comtrade",
         category="international_trade_data",
-        adapter="official_data.un_comtrade",
+        adapter="content_research.sources.official_data.un_comtrade",
         access_method="api",
         default_body_tier=3,
         priority=25,
