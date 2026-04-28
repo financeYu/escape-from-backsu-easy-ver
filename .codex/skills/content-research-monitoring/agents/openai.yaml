@@ -1,0 +1,4 @@
+interface:
+  display_name: "Content Research Monitoring"
+  short_description: "Track collection health and stale sources."
+  default_prompt: "Use $content-research-monitoring to define collection status, credential failures, volume-drop alerts, and last-success tracking."

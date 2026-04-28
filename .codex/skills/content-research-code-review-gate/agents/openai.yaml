@@ -1,0 +1,4 @@
+interface:
+  display_name: "Content Research Code Review Gate"
+  short_description: "Review research diffs for scope and risk gates."
+  default_prompt: "Use $content-research-code-review-gate to review content_research_mvp changes for scope boundaries, tests, evidence provenance, source safety, rights/copyright, pipeline output stability, and policy risk."

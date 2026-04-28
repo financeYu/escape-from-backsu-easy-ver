@@ -1,0 +1,4 @@
+interface:
+  display_name: "Content Research Rights Gate"
+  short_description: "Conservative copyright tiering before storing source bodies."
+  default_prompt: "Use $content-research-rights-gate to classify source rights and decide whether article bodies, snippets, caches, quotes, or official data may be stored."

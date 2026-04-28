@@ -1,0 +1,4 @@
+interface:
+  display_name: "Content Research Evidence Pipeline"
+  short_description: "Normalize research evidence across news and official data flows."
+  default_prompt: "Use $content-research-evidence-pipeline to define evidence candidate fields and route news or official-data inputs through issue_radar, data_matcher, claim_extractor, and brief_builder."

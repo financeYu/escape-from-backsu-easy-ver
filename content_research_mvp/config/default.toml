@@ -1,0 +1,26 @@
+[project]
+language = "ko"
+output_dir = "outputs"
+default_as_of = "2026-04-27"
+
+[policy]
+youtube_metadata_only = true
+forbid_youtube_html_scraping = true
+forbid_video_download = true
+forbid_unauthorized_transcripts = true
+forbid_bulk_comment_scraping = true
+forbid_creator_style_cloning = true
+forbid_investment_advice = true
+
+[scoring.weights]
+popularity = 0.22
+economic_linkage = 0.24
+story_potential = 0.20
+source_availability = 0.20
+risk_safety = 0.14
+
+[collection]
+enabled = true
+interval_minutes = 60
+timezone = "Asia/Seoul"
+output_dir = "outputs/collections"

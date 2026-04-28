@@ -1,0 +1,21 @@
+[agents.topic_radar]
+goal = "Collect current issue candidates for Korean current affairs/economy YouTube research."
+
+[agents.channel_fit]
+goal = "Score candidate topics for content suitability without making investment recommendations."
+
+[agents.research]
+goal = "Collect official, primary, press, and statistical sources and convert them into EvidenceCards."
+
+[agents.narrative]
+goal = "Build a hook-background-structure-issues-twist-impact-conclusion outline."
+
+[agents.ppt]
+goal = "Convert narrative into a 15-25 slide PPT outline and speaker notes."
+
+[agents.script]
+goal = "Write a Korean shooting script based on the slide outline."
+
+[agents.fact_risk]
+goal = "Review factual claims, numbers, bias, copyright, and collection-policy risk."
+
