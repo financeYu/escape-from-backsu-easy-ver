@@ -12,6 +12,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from content_research.env import load_dotenv
+from content_research.sources.json_api import parse_json_response
 
 
 FRED_SERIES_ENDPOINT = "https://api.stlouisfed.org/fred/series"
@@ -204,7 +205,7 @@ class FREDClient:
             raise FREDApiError(f"FRED HTTP {exc.code}: {_safe_error_detail(detail)}") from exc
         except URLError as exc:
             raise FREDApiError(f"FRED request failed: {exc.reason}") from exc
-        data = json.loads(body)
+        data = parse_json_response(body, "FRED API", FREDApiError)
         if not isinstance(data, dict):
             raise FREDApiError("Unexpected FRED response type.")
         _raise_if_fred_error(data)

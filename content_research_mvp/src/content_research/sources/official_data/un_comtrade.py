@@ -13,6 +13,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from content_research.env import load_dotenv
+from content_research.sources.json_api import parse_json_response
 
 
 UN_COMTRADE_DATA_ENDPOINT = "https://comtradeapi.un.org/data/v1/get/C/A/HS"
@@ -191,7 +192,7 @@ class UNComtradeClient:
             raise UNComtradeApiError(f"UN Comtrade HTTP {exc.code}: {_safe_error_detail(detail)}") from exc
         except URLError as exc:
             raise UNComtradeApiError(f"UN Comtrade request failed: {exc.reason}") from exc
-        data = json.loads(body)
+        data = parse_json_response(body, "UN Comtrade API", UNComtradeApiError)
         if not isinstance(data, dict):
             raise UNComtradeApiError("Unexpected UN Comtrade response type.")
         _raise_if_comtrade_error(data)

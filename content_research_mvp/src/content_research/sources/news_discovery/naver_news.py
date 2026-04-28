@@ -20,6 +20,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from content_research.env import load_dotenv
+from content_research.sources.json_api import parse_json_response
 
 
 NAVER_NEWS_ENDPOINT = "https://openapi.naver.com/v1/search/news.json"
@@ -145,7 +146,7 @@ class NaverNewsClient:
         except URLError as exc:
             raise NaverNewsApiError(f"Naver API request failed: {exc.reason}") from exc
 
-        data = json.loads(body)
+        data = parse_json_response(body, "Naver API", NaverNewsApiError)
         items = [
             _item_from_api(query, item)
             for item in data.get("items", [])

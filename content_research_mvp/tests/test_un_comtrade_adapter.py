@@ -118,7 +118,7 @@ def test_collection_process_writes_un_comtrade_records(monkeypatch, tmp_path):
 
     assert manifest.results[0].status == "fetched_trade_data"
     assert manifest.results[0].collected_records == 1
-    records_path = tmp_path / manifest.output_partition / "records" / "un_comtrade.jsonl"
+    records_path = tmp_path / manifest.output_partition / "records" / manifest.run_id / "un_comtrade.jsonl"
     assert records_path.exists()
     assert "Rep. of Korea" in records_path.read_text(encoding="utf-8")
 

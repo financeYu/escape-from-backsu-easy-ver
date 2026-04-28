@@ -16,6 +16,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from content_research.env import load_dotenv
+from content_research.sources.json_api import parse_json_response
 
 
 NYTIMES_ARTICLE_SEARCH_ENDPOINT = "https://api.nytimes.com/svc/search/v2/articlesearch.json"
@@ -210,7 +211,7 @@ class NYTimesClient:
             raise NYTimesApiError(f"NYT API HTTP {exc.code}: {_safe_error_detail(detail)}") from exc
         except URLError as exc:
             raise NYTimesApiError(f"NYT API request failed: {exc.reason}") from exc
-        return json.loads(body)
+        return parse_json_response(body, "NYT API", NYTimesApiError)
 
 
 def _article_item_from_search_doc(query: str, doc: dict[str, Any]) -> NYTimesArticleItem:

@@ -27,6 +27,16 @@ from content_research.sources.news_discovery.newsapi import NewsAPIClient, NewsA
 from content_research.sources.news_discovery.nytimes import NYTimesApiError, NYTimesClient
 
 
+NAVER_NEWS_DISPLAY = 10
+NAVER_NEWS_SORT = "date"
+OPENDART_LOOKBACK_DAYS = 7
+KOSIS_ROOT_VIEW_CODE = "MT_ZTITLE"
+KOSIS_ROOT_PARENT_ID = ""
+ECOS_KEY_STAT_START = 1
+ECOS_KEY_STAT_END = 100
+ECOS_KEY_STAT_LANGUAGE = "kr"
+
+
 @dataclass(frozen=True)
 class CollectionSourceResult:
     source_id: str
@@ -130,11 +140,13 @@ class HourlyCollectionProcess:
 
     def run_once(self, now: datetime | None = None, mode: str = "manual") -> tuple[CollectionRunManifest, Path, Path]:
         started_at = self._normalize_now(now)
-        run_id = started_at.strftime("%Y%m%dT%H%M%S%z")
+        base_run_id = started_at.strftime("%Y%m%dT%H%M%S%f%z")
         partition = started_at.strftime("%Y-%m-%d/%H")
         run_dir = self.output_dir / partition
         run_dir.mkdir(parents=True, exist_ok=True)
-        results = [self._collect_source_result(source, run_dir) for source in self.sources]
+        run_id = self._unique_run_id(run_dir, base_run_id)
+        records_dir = run_dir / "records" / run_id
+        results = [self._collect_source_result(source, records_dir) for source in self.sources]
         finished_at = datetime.now(self.timezone)
         next_run_at = self.next_run_after(started_at)
         manifest = CollectionRunManifest(
@@ -184,6 +196,15 @@ class HourlyCollectionProcess:
         markdown_path.write_text(manifest.to_markdown(), encoding="utf-8")
         return manifest, jsonl_path, markdown_path
 
+    @staticmethod
+    def _unique_run_id(run_dir: Path, base_run_id: str) -> str:
+        run_id = base_run_id
+        suffix = 1
+        while (run_dir / f"{run_id}.jsonl").exists() or (run_dir / "records" / run_id).exists():
+            run_id = f"{base_run_id}-{suffix:03d}"
+            suffix += 1
+        return run_id
+
     def next_run_after(self, moment: datetime) -> datetime:
         local = self._normalize_now(moment).replace(second=0, microsecond=0)
         if self.interval_minutes == 60:
@@ -192,91 +213,46 @@ class HourlyCollectionProcess:
 
     def _collect_source_result(self, source: CollectionSource, run_dir: Path) -> CollectionSourceResult:
         if not source.enabled:
-            return CollectionSourceResult(
-                source_id=source.source_id,
-                display_name=source.display_name,
-                adapter=source.adapter,
-                category=source.category,
-                access_method=source.access_method,
-                body_collection_tier=source.default_body_tier,
+            return self._source_result(
+                source,
                 status="skipped",
-                collected_records=0,
                 rights_gate_status="not_checked",
                 message="Source disabled in catalog.",
             )
 
-        if source.source_id == "naver_news":
-            return self._collect_naver_news(source, run_dir)
-        if source.source_id == "newsapi":
-            return self._collect_newsapi(source, run_dir)
-        if source.source_id == "nytimes":
-            return self._collect_nytimes(source, run_dir)
-        if source.source_id == "ecos":
-            return self._collect_ecos(source, run_dir)
-        if source.source_id == "kosis":
-            return self._collect_kosis(source, run_dir)
-        if source.source_id == "opendart":
-            return self._collect_opendart(source, run_dir)
-        if source.source_id == "fred":
-            return self._collect_fred(source, run_dir)
-        if source.source_id == "eia":
-            return self._collect_eia(source, run_dir)
-        if source.source_id == "un_comtrade":
-            return self._collect_un_comtrade(source, run_dir)
+        handlers: dict[str, Callable[[CollectionSource, Path], CollectionSourceResult]] = {
+            "naver_news": self._collect_naver_news,
+            "newsapi": self._collect_newsapi,
+            "nytimes": self._collect_nytimes,
+            "ecos": self._collect_ecos,
+            "kosis": self._collect_kosis,
+            "opendart": self._collect_opendart,
+            "fred": self._collect_fred,
+            "eia": self._collect_eia,
+            "un_comtrade": self._collect_un_comtrade,
+        }
+        handler = handlers.get(source.source_id)
+        if handler is not None:
+            return handler(source, run_dir)
 
         rights_gate_status = "metadata_only" if source.default_body_tier == 0 else "body_allowed_by_source_tier"
-        return CollectionSourceResult(
-            source_id=source.source_id,
-            display_name=source.display_name,
-            adapter=source.adapter,
-            category=source.category,
-            access_method=source.access_method,
-            body_collection_tier=source.default_body_tier,
+        return self._source_result(
+            source,
             status="planned",
-            collected_records=0,
             rights_gate_status=rights_gate_status,
             message="Adapter placeholder planned; no network request executed in MVP scheduler.",
         )
 
-    def _collect_naver_news(self, source: CollectionSource, run_dir: Path) -> CollectionSourceResult:
-        client = NaverNewsClient.from_env()
-        if client is None:
-            return CollectionSourceResult(
-                source_id=source.source_id,
-                display_name=source.display_name,
-                adapter=source.adapter,
-                category=source.category,
-                access_method=source.access_method,
-                body_collection_tier=source.default_body_tier,
-                status="missing_credentials",
-                collected_records=0,
-                rights_gate_status="metadata_only",
-                message="NAVER_CLIENT_ID and NAVER_CLIENT_SECRET are required in environment or .env.",
-            )
-
-        try:
-            items = client.collect_queries(display=10, sort="date")
-        except NaverNewsApiError as exc:
-            return CollectionSourceResult(
-                source_id=source.source_id,
-                display_name=source.display_name,
-                adapter=source.adapter,
-                category=source.category,
-                access_method=source.access_method,
-                body_collection_tier=source.default_body_tier,
-                status="error",
-                collected_records=0,
-                rights_gate_status="metadata_only",
-                message=str(exc),
-            )
-
-        records_dir = run_dir / "records"
-        records_dir.mkdir(parents=True, exist_ok=True)
-        records_path = records_dir / "naver_news.jsonl"
-        records_path.write_text(
-            "\n".join(json.dumps(item.to_dict(), ensure_ascii=False) for item in items) + ("\n" if items else ""),
-            encoding="utf-8",
-        )
+    @staticmethod
+    def _source_result(
+        source: CollectionSource,
+        *,
+        status: str,
+        rights_gate_status: str,
+        message: str,
+        collected_records: int = 0,
+        records_path: str | Path = "",
+    ) -> CollectionSourceResult:
         return CollectionSourceResult(
             source_id=source.source_id,
             display_name=source.display_name,
@@ -284,438 +260,292 @@ class HourlyCollectionProcess:
             category=source.category,
             access_method=source.access_method,
             body_collection_tier=source.default_body_tier,
-            status="fetched_metadata",
+            status=status,
+            collected_records=collected_records,
+            rights_gate_status=rights_gate_status,
+            message=message,
+            records_path=str(records_path) if records_path else "",
+        )
+
+    def _missing_credentials_result(
+        self,
+        source: CollectionSource,
+        *,
+        rights_gate_status: str,
+        required_credentials: str,
+    ) -> CollectionSourceResult:
+        return self._source_result(
+            source,
+            status="missing_credentials",
+            rights_gate_status=rights_gate_status,
+            message=f"{required_credentials} required in environment or .env.",
+        )
+
+    def _error_result(
+        self,
+        source: CollectionSource,
+        *,
+        rights_gate_status: str,
+        exc: Exception,
+    ) -> CollectionSourceResult:
+        return self._source_result(
+            source,
+            status="error",
+            rights_gate_status=rights_gate_status,
+            message=str(exc),
+        )
+
+    def _fetched_records_result(
+        self,
+        source: CollectionSource,
+        *,
+        status: str,
+        rights_gate_status: str,
+        message: str,
+        records_dir: Path,
+        filename: str,
+        records: Iterable[Any],
+    ) -> CollectionSourceResult:
+        items = list(records)
+        records_path = self._write_records(records_dir, filename, items)
+        return self._source_result(
+            source,
+            status=status,
             collected_records=len(items),
+            rights_gate_status=rights_gate_status,
+            message=message,
+            records_path=records_path,
+        )
+
+    @staticmethod
+    def _write_records(records_dir: Path, filename: str, records: Iterable[Any]) -> Path:
+        records_dir.mkdir(parents=True, exist_ok=True)
+        records_path = records_dir / filename
+        lines = [json.dumps(item.to_dict(), ensure_ascii=False) for item in records]
+        records_path.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+        return records_path
+
+    def _collect_naver_news(self, source: CollectionSource, run_dir: Path) -> CollectionSourceResult:
+        client = NaverNewsClient.from_env()
+        if client is None:
+            return self._missing_credentials_result(
+                source,
+                rights_gate_status="metadata_only",
+                required_credentials="NAVER_CLIENT_ID and NAVER_CLIENT_SECRET are",
+            )
+
+        try:
+            items = client.collect_queries(display=NAVER_NEWS_DISPLAY, sort=NAVER_NEWS_SORT)
+        except NaverNewsApiError as exc:
+            return self._error_result(source, rights_gate_status="metadata_only", exc=exc)
+
+        return self._fetched_records_result(
+            source,
+            status="fetched_metadata",
             rights_gate_status="metadata_only",
             message="Fetched Naver News Search API metadata. Article bodies were not collected.",
-            records_path=str(records_path),
+            records_dir=run_dir,
+            filename="naver_news.jsonl",
+            records=items,
         )
 
     def _collect_newsapi(self, source: CollectionSource, run_dir: Path) -> CollectionSourceResult:
         client = NewsAPIClient.from_env()
         if client is None:
-            return CollectionSourceResult(
-                source_id=source.source_id,
-                display_name=source.display_name,
-                adapter=source.adapter,
-                category=source.category,
-                access_method=source.access_method,
-                body_collection_tier=source.default_body_tier,
-                status="missing_credentials",
-                collected_records=0,
+            return self._missing_credentials_result(
+                source,
                 rights_gate_status="metadata_only",
-                message="NEWSAPI_KEY is required in environment or .env.",
+                required_credentials="NEWSAPI_KEY is",
             )
 
         try:
             items = client.collect_default()
         except NewsAPIError as exc:
-            return CollectionSourceResult(
-                source_id=source.source_id,
-                display_name=source.display_name,
-                adapter=source.adapter,
-                category=source.category,
-                access_method=source.access_method,
-                body_collection_tier=source.default_body_tier,
-                status="error",
-                collected_records=0,
-                rights_gate_status="metadata_only",
-                message=str(exc),
-            )
+            return self._error_result(source, rights_gate_status="metadata_only", exc=exc)
 
-        records_dir = run_dir / "records"
-        records_dir.mkdir(parents=True, exist_ok=True)
-        records_path = records_dir / "newsapi.jsonl"
-        records_path.write_text(
-            "\n".join(json.dumps(item.to_dict(), ensure_ascii=False) for item in items) + ("\n" if items else ""),
-            encoding="utf-8",
-        )
-        return CollectionSourceResult(
-            source_id=source.source_id,
-            display_name=source.display_name,
-            adapter=source.adapter,
-            category=source.category,
-            access_method=source.access_method,
-            body_collection_tier=source.default_body_tier,
+        return self._fetched_records_result(
+            source,
             status="fetched_metadata",
-            collected_records=len(items),
             rights_gate_status="metadata_only",
             message="Fetched NewsAPI.org Everything and Top Headlines metadata. Article bodies were not collected.",
-            records_path=str(records_path),
+            records_dir=run_dir,
+            filename="newsapi.jsonl",
+            records=items,
         )
 
     def _collect_opendart(self, source: CollectionSource, run_dir: Path) -> CollectionSourceResult:
         client = OpenDARTClient.from_env()
         if client is None:
-            return CollectionSourceResult(
-                source_id=source.source_id,
-                display_name=source.display_name,
-                adapter=source.adapter,
-                category=source.category,
-                access_method=source.access_method,
-                body_collection_tier=source.default_body_tier,
-                status="missing_credentials",
-                collected_records=0,
+            return self._missing_credentials_result(
+                source,
                 rights_gate_status="official_disclosure_metadata",
-                message="OPENDART_API_KEY is required in environment or .env.",
+                required_credentials="OPENDART_API_KEY is",
             )
 
         try:
-            result = client.recent_disclosures(today=datetime.now(self.timezone).date(), lookback_days=7)
-        except OpenDARTApiError as exc:
-            return CollectionSourceResult(
-                source_id=source.source_id,
-                display_name=source.display_name,
-                adapter=source.adapter,
-                category=source.category,
-                access_method=source.access_method,
-                body_collection_tier=source.default_body_tier,
-                status="error",
-                collected_records=0,
-                rights_gate_status="official_disclosure_metadata",
-                message=str(exc),
+            result = client.recent_disclosures(
+                today=datetime.now(self.timezone).date(),
+                lookback_days=OPENDART_LOOKBACK_DAYS,
             )
+        except OpenDARTApiError as exc:
+            return self._error_result(source, rights_gate_status="official_disclosure_metadata", exc=exc)
 
-        records_dir = run_dir / "records"
-        records_dir.mkdir(parents=True, exist_ok=True)
-        records_path = records_dir / "opendart.jsonl"
-        records_path.write_text(
-            "\n".join(json.dumps(item.to_dict(), ensure_ascii=False) for item in result.items)
-            + ("\n" if result.items else ""),
-            encoding="utf-8",
-        )
-        return CollectionSourceResult(
-            source_id=source.source_id,
-            display_name=source.display_name,
-            adapter=source.adapter,
-            category=source.category,
-            access_method=source.access_method,
-            body_collection_tier=source.default_body_tier,
+        return self._fetched_records_result(
+            source,
             status="fetched_disclosures",
-            collected_records=len(result.items),
             rights_gate_status="official_disclosure_metadata",
             message="Fetched OpenDART disclosure list records for the last 7 days.",
-            records_path=str(records_path),
+            records_dir=run_dir,
+            filename="opendart.jsonl",
+            records=result.items,
         )
 
     def _collect_fred(self, source: CollectionSource, run_dir: Path) -> CollectionSourceResult:
         client = FREDClient.from_env()
         if client is None:
-            return CollectionSourceResult(
-                source_id=source.source_id,
-                display_name=source.display_name,
-                adapter=source.adapter,
-                category=source.category,
-                access_method=source.access_method,
-                body_collection_tier=source.default_body_tier,
-                status="missing_credentials",
-                collected_records=0,
+            return self._missing_credentials_result(
+                source,
                 rights_gate_status="official_data",
-                message="FRED_API_KEY is required in environment or .env.",
+                required_credentials="FRED_API_KEY is",
             )
 
         try:
             items = client.collect_default()
         except FREDApiError as exc:
-            return CollectionSourceResult(
-                source_id=source.source_id,
-                display_name=source.display_name,
-                adapter=source.adapter,
-                category=source.category,
-                access_method=source.access_method,
-                body_collection_tier=source.default_body_tier,
-                status="error",
-                collected_records=0,
-                rights_gate_status="official_data",
-                message=str(exc),
-            )
+            return self._error_result(source, rights_gate_status="official_data", exc=exc)
 
-        records_dir = run_dir / "records"
-        records_dir.mkdir(parents=True, exist_ok=True)
-        records_path = records_dir / "fred.jsonl"
-        records_path.write_text(
-            "\n".join(json.dumps(item.to_dict(), ensure_ascii=False) for item in items) + ("\n" if items else ""),
-            encoding="utf-8",
-        )
-        return CollectionSourceResult(
-            source_id=source.source_id,
-            display_name=source.display_name,
-            adapter=source.adapter,
-            category=source.category,
-            access_method=source.access_method,
-            body_collection_tier=source.default_body_tier,
+        return self._fetched_records_result(
+            source,
             status="fetched_observations",
-            collected_records=len(items),
             rights_gate_status="official_data",
             message="Fetched FRED official time-series observations for default US macro and financial indicators.",
-            records_path=str(records_path),
+            records_dir=run_dir,
+            filename="fred.jsonl",
+            records=items,
         )
 
     def _collect_eia(self, source: CollectionSource, run_dir: Path) -> CollectionSourceResult:
         client = EIAClient.from_env()
         if client is None:
-            return CollectionSourceResult(
-                source_id=source.source_id,
-                display_name=source.display_name,
-                adapter=source.adapter,
-                category=source.category,
-                access_method=source.access_method,
-                body_collection_tier=source.default_body_tier,
-                status="missing_credentials",
-                collected_records=0,
+            return self._missing_credentials_result(
+                source,
                 rights_gate_status="official_data",
-                message="EIA_API_KEY is required in environment or .env.",
+                required_credentials="EIA_API_KEY is",
             )
 
         try:
             items = client.collect_default()
         except EIAApiError as exc:
-            return CollectionSourceResult(
-                source_id=source.source_id,
-                display_name=source.display_name,
-                adapter=source.adapter,
-                category=source.category,
-                access_method=source.access_method,
-                body_collection_tier=source.default_body_tier,
-                status="error",
-                collected_records=0,
-                rights_gate_status="official_data",
-                message=str(exc),
-            )
+            return self._error_result(source, rights_gate_status="official_data", exc=exc)
 
-        records_dir = run_dir / "records"
-        records_dir.mkdir(parents=True, exist_ok=True)
-        records_path = records_dir / "eia.jsonl"
-        records_path.write_text(
-            "\n".join(json.dumps(item.to_dict(), ensure_ascii=False) for item in items) + ("\n" if items else ""),
-            encoding="utf-8",
-        )
-        return CollectionSourceResult(
-            source_id=source.source_id,
-            display_name=source.display_name,
-            adapter=source.adapter,
-            category=source.category,
-            access_method=source.access_method,
-            body_collection_tier=source.default_body_tier,
+        return self._fetched_records_result(
+            source,
             status="fetched_energy_series",
-            collected_records=len(items),
             rights_gate_status="official_data",
             message="Fetched EIA official energy series observations for default oil, gas, electricity, and inventory indicators.",
-            records_path=str(records_path),
+            records_dir=run_dir,
+            filename="eia.jsonl",
+            records=items,
         )
 
     def _collect_un_comtrade(self, source: CollectionSource, run_dir: Path) -> CollectionSourceResult:
         client = UNComtradeClient.from_env()
         if client is None:
-            return CollectionSourceResult(
-                source_id=source.source_id,
-                display_name=source.display_name,
-                adapter=source.adapter,
-                category=source.category,
-                access_method=source.access_method,
-                body_collection_tier=source.default_body_tier,
-                status="missing_credentials",
-                collected_records=0,
+            return self._missing_credentials_result(
+                source,
                 rights_gate_status="official_data",
-                message="UN_COMTRADE_KEY or COMTRADE_API_KEY is required in environment or .env.",
+                required_credentials="UN_COMTRADE_KEY or COMTRADE_API_KEY is",
             )
 
         try:
             items = client.collect_default()
         except UNComtradeApiError as exc:
-            return CollectionSourceResult(
-                source_id=source.source_id,
-                display_name=source.display_name,
-                adapter=source.adapter,
-                category=source.category,
-                access_method=source.access_method,
-                body_collection_tier=source.default_body_tier,
-                status="error",
-                collected_records=0,
-                rights_gate_status="official_data",
-                message=str(exc),
-            )
+            return self._error_result(source, rights_gate_status="official_data", exc=exc)
 
-        records_dir = run_dir / "records"
-        records_dir.mkdir(parents=True, exist_ok=True)
-        records_path = records_dir / "un_comtrade.jsonl"
-        records_path.write_text(
-            "\n".join(json.dumps(item.to_dict(), ensure_ascii=False) for item in items) + ("\n" if items else ""),
-            encoding="utf-8",
-        )
-        return CollectionSourceResult(
-            source_id=source.source_id,
-            display_name=source.display_name,
-            adapter=source.adapter,
-            category=source.category,
-            access_method=source.access_method,
-            body_collection_tier=source.default_body_tier,
+        return self._fetched_records_result(
+            source,
             status="fetched_trade_data",
-            collected_records=len(items),
             rights_gate_status="official_data",
             message="Fetched UN Comtrade annual total import/export records for default major reporters.",
-            records_path=str(records_path),
+            records_dir=run_dir,
+            filename="un_comtrade.jsonl",
+            records=items,
         )
 
     def _collect_kosis(self, source: CollectionSource, run_dir: Path) -> CollectionSourceResult:
         client = KOSISClient.from_env()
         if client is None:
-            return CollectionSourceResult(
-                source_id=source.source_id,
-                display_name=source.display_name,
-                adapter=source.adapter,
-                category=source.category,
-                access_method=source.access_method,
-                body_collection_tier=source.default_body_tier,
-                status="missing_credentials",
-                collected_records=0,
+            return self._missing_credentials_result(
+                source,
                 rights_gate_status="official_data",
-                message="KOSIS_API_KEY is required in environment or .env.",
+                required_credentials="KOSIS_API_KEY is",
             )
 
         try:
-            result = client.statistics_list(view_code="MT_ZTITLE", parent_id="")
+            result = client.statistics_list(view_code=KOSIS_ROOT_VIEW_CODE, parent_id=KOSIS_ROOT_PARENT_ID)
         except KOSISApiError as exc:
-            return CollectionSourceResult(
-                source_id=source.source_id,
-                display_name=source.display_name,
-                adapter=source.adapter,
-                category=source.category,
-                access_method=source.access_method,
-                body_collection_tier=source.default_body_tier,
-                status="error",
-                collected_records=0,
-                rights_gate_status="official_data",
-                message=str(exc),
-            )
+            return self._error_result(source, rights_gate_status="official_data", exc=exc)
 
-        records_dir = run_dir / "records"
-        records_dir.mkdir(parents=True, exist_ok=True)
-        records_path = records_dir / "kosis.jsonl"
-        records_path.write_text(
-            "\n".join(json.dumps(item.to_dict(), ensure_ascii=False) for item in result.items)
-            + ("\n" if result.items else ""),
-            encoding="utf-8",
-        )
-        return CollectionSourceResult(
-            source_id=source.source_id,
-            display_name=source.display_name,
-            adapter=source.adapter,
-            category=source.category,
-            access_method=source.access_method,
-            body_collection_tier=source.default_body_tier,
+        return self._fetched_records_result(
+            source,
             status="fetched_catalog",
-            collected_records=len(result.items),
             rights_gate_status="official_data",
             message="Fetched KOSIS statistics list records for MT_ZTITLE root.",
-            records_path=str(records_path),
+            records_dir=run_dir,
+            filename="kosis.jsonl",
+            records=result.items,
         )
 
     def _collect_ecos(self, source: CollectionSource, run_dir: Path) -> CollectionSourceResult:
         client = ECOSClient.from_env()
         if client is None:
-            return CollectionSourceResult(
-                source_id=source.source_id,
-                display_name=source.display_name,
-                adapter=source.adapter,
-                category=source.category,
-                access_method=source.access_method,
-                body_collection_tier=source.default_body_tier,
-                status="missing_credentials",
-                collected_records=0,
+            return self._missing_credentials_result(
+                source,
                 rights_gate_status="official_data",
-                message="ECOS_API_KEY is required in environment or .env.",
+                required_credentials="ECOS_API_KEY is",
             )
 
         try:
-            result = client.key_statistics(start=1, end=100, language="kr")
-        except ECOSApiError as exc:
-            return CollectionSourceResult(
-                source_id=source.source_id,
-                display_name=source.display_name,
-                adapter=source.adapter,
-                category=source.category,
-                access_method=source.access_method,
-                body_collection_tier=source.default_body_tier,
-                status="error",
-                collected_records=0,
-                rights_gate_status="official_data",
-                message=str(exc),
+            result = client.key_statistics(
+                start=ECOS_KEY_STAT_START,
+                end=ECOS_KEY_STAT_END,
+                language=ECOS_KEY_STAT_LANGUAGE,
             )
+        except ECOSApiError as exc:
+            return self._error_result(source, rights_gate_status="official_data", exc=exc)
 
-        records_dir = run_dir / "records"
-        records_dir.mkdir(parents=True, exist_ok=True)
-        records_path = records_dir / "ecos.jsonl"
-        records_path.write_text(
-            "\n".join(json.dumps(item.to_dict(), ensure_ascii=False) for item in result.items)
-            + ("\n" if result.items else ""),
-            encoding="utf-8",
-        )
-        return CollectionSourceResult(
-            source_id=source.source_id,
-            display_name=source.display_name,
-            adapter=source.adapter,
-            category=source.category,
-            access_method=source.access_method,
-            body_collection_tier=source.default_body_tier,
+        return self._fetched_records_result(
+            source,
             status="fetched_statistics",
-            collected_records=len(result.items),
             rights_gate_status="official_data",
             message="Fetched Bank of Korea ECOS KeyStatisticList records.",
-            records_path=str(records_path),
+            records_dir=run_dir,
+            filename="ecos.jsonl",
+            records=result.items,
         )
 
     def _collect_nytimes(self, source: CollectionSource, run_dir: Path) -> CollectionSourceResult:
         client = NYTimesClient.from_env()
         if client is None:
-            return CollectionSourceResult(
-                source_id=source.source_id,
-                display_name=source.display_name,
-                adapter=source.adapter,
-                category=source.category,
-                access_method=source.access_method,
-                body_collection_tier=source.default_body_tier,
-                status="missing_credentials",
-                collected_records=0,
+            return self._missing_credentials_result(
+                source,
                 rights_gate_status="metadata_only",
-                message="NYTIMES_API_KEY is required in environment or .env.",
+                required_credentials="NYTIMES_API_KEY is",
             )
 
         try:
             items = client.collect_default()
         except NYTimesApiError as exc:
-            return CollectionSourceResult(
-                source_id=source.source_id,
-                display_name=source.display_name,
-                adapter=source.adapter,
-                category=source.category,
-                access_method=source.access_method,
-                body_collection_tier=source.default_body_tier,
-                status="error",
-                collected_records=0,
-                rights_gate_status="metadata_only",
-                message=str(exc),
-            )
+            return self._error_result(source, rights_gate_status="metadata_only", exc=exc)
 
-        records_dir = run_dir / "records"
-        records_dir.mkdir(parents=True, exist_ok=True)
-        records_path = records_dir / "nytimes.jsonl"
-        records_path.write_text(
-            "\n".join(json.dumps(item.to_dict(), ensure_ascii=False) for item in items) + ("\n" if items else ""),
-            encoding="utf-8",
-        )
-        return CollectionSourceResult(
-            source_id=source.source_id,
-            display_name=source.display_name,
-            adapter=source.adapter,
-            category=source.category,
-            access_method=source.access_method,
-            body_collection_tier=source.default_body_tier,
+        return self._fetched_records_result(
+            source,
             status="fetched_metadata",
-            collected_records=len(items),
             rights_gate_status="metadata_only",
             message="Fetched NYT Article Search and Top Stories API metadata. Article bodies were not collected.",
-            records_path=str(records_path),
+            records_dir=run_dir,
+            filename="nytimes.jsonl",
+            records=items,
         )
 
     def _normalize_now(self, value: datetime | None) -> datetime:

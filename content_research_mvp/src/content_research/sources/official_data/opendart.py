@@ -13,6 +13,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from content_research.env import load_dotenv
+from content_research.sources.json_api import parse_json_response
 
 
 OPENDART_DISCLOSURE_LIST_ENDPOINT = "https://opendart.fss.or.kr/api/list.json"
@@ -161,7 +162,7 @@ class OpenDARTClient:
             raise OpenDARTApiError(f"OpenDART API HTTP {exc.code}: {_safe_error_detail(detail)}") from exc
         except URLError as exc:
             raise OpenDARTApiError(f"OpenDART API request failed: {exc.reason}") from exc
-        data = json.loads(body)
+        data = parse_json_response(body, "OpenDART API", OpenDARTApiError)
         if not isinstance(data, dict):
             raise OpenDARTApiError("Unexpected OpenDART response type.")
         return data

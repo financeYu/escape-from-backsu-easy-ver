@@ -130,7 +130,20 @@ def _title_or_indicator(record: dict[str, Any]) -> str | None:
         )
     if source_id == "opendart":
         return _join_nonempty(_first_present(record, "corp_name"), _first_present(record, "report_name"))
-    return _first_present(record, "title", "indicator_name", "series_id", "stat_name", "item_name") or None
+    return (
+        _first_present(
+            record,
+            "title",
+            "indicator_name",
+            "statistic_name",
+            "series_id",
+            "stat_name",
+            "item_name",
+            "table_name",
+            "list_name",
+        )
+        or None
+    )
 
 
 def _url(record: dict[str, Any]) -> str | None:
@@ -160,6 +173,9 @@ def _published_or_observed_at(record: dict[str, Any]) -> str | None:
             "published_date",
             "pub_date",
             "rcept_dt",
+            "cycle",
+            "updated_at",
+            "send_de",
             "last_updated",
         )
         or None
@@ -177,7 +193,7 @@ def _unit(record: dict[str, Any]) -> str | None:
     source_id = _as_str(record.get("source_id"))
     if source_id == "un_comtrade" and _first_present(record, "primary_value"):
         return "USD"
-    return _first_present(record, "unit", "units", "units_short", "quantity_unit") or None
+    return _first_present(record, "unit", "unit_name", "units", "units_short", "quantity_unit") or None
 
 
 def _snippet(record: dict[str, Any]) -> str | None:

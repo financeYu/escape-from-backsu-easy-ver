@@ -88,7 +88,7 @@ def test_collection_process_writes_ecos_records(monkeypatch, tmp_path):
 
     assert manifest.results[0].status == "fetched_statistics"
     assert manifest.results[0].collected_records == 1
-    records_path = tmp_path / manifest.output_partition / "records" / "ecos.jsonl"
+    records_path = tmp_path / manifest.output_partition / "records" / manifest.run_id / "ecos.jsonl"
     assert records_path.exists()
     assert "한국은행 기준금리" in records_path.read_text(encoding="utf-8")
 

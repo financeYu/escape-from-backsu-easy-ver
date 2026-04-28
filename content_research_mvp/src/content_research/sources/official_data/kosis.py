@@ -13,6 +13,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from content_research.env import load_dotenv
+from content_research.sources.json_api import parse_json_response
 
 
 KOSIS_STATISTICS_LIST_ENDPOINT = "https://kosis.kr/openapi/statisticsList.do"
@@ -167,7 +168,7 @@ class KOSISClient:
             raise KOSISApiError(f"KOSIS API HTTP {exc.code}: {_safe_error_detail(detail)}") from exc
         except URLError as exc:
             raise KOSISApiError(f"KOSIS API request failed: {exc.reason}") from exc
-        return json.loads(body)
+        return parse_json_response(body, "KOSIS API", KOSISApiError)
 
 
 def _statistics_list_item_from_row(row: dict[str, Any]) -> KOSISStatisticsListItem:

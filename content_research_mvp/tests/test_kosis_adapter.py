@@ -99,7 +99,7 @@ def test_collection_process_writes_kosis_records(monkeypatch, tmp_path):
 
     assert manifest.results[0].status == "fetched_catalog"
     assert manifest.results[0].collected_records == 1
-    records_path = tmp_path / manifest.output_partition / "records" / "kosis.jsonl"
+    records_path = tmp_path / manifest.output_partition / "records" / manifest.run_id / "kosis.jsonl"
     assert records_path.exists()
     assert "인구" in records_path.read_text(encoding="utf-8")
 

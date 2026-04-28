@@ -11,6 +11,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from content_research.env import load_dotenv
+from content_research.sources.json_api import parse_json_response
 
 
 ECOS_API_BASE_URL = "https://ecos.bok.or.kr/api"
@@ -126,7 +127,7 @@ class ECOSClient:
             raise ECOSApiError(f"ECOS API HTTP {exc.code}: {_safe_error_detail(detail)}") from exc
         except URLError as exc:
             raise ECOSApiError(f"ECOS API request failed: {exc.reason}") from exc
-        data = json.loads(body)
+        data = parse_json_response(body, "ECOS API", ECOSApiError)
         if isinstance(data, dict) and "RESULT" in data:
             _raise_if_ecos_error(data)
         return data

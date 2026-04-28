@@ -5,7 +5,7 @@ import pytest
 from content_research.collection.catalog import CollectionSource
 from content_research.collection.process import HourlyCollectionProcess
 from content_research.sources.news_discovery import naver_news
-from content_research.sources.news_discovery.naver_news import NaverNewsClient, NaverNewsCredentials
+from content_research.sources.news_discovery.naver_news import NaverNewsApiError, NaverNewsClient, NaverNewsCredentials
 
 
 class FakeResponse:
@@ -20,6 +20,20 @@ class FakeResponse:
 
     def read(self):
         return json.dumps(self.payload).encode("utf-8")
+
+
+class FakeRawResponse:
+    def __init__(self, body: bytes):
+        self.body = body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return None
+
+    def read(self):
+        return self.body
 
 
 def test_naver_news_client_parses_metadata(monkeypatch):
@@ -89,7 +103,7 @@ def test_collection_process_writes_naver_records(monkeypatch, tmp_path):
 
     assert manifest.results[0].status == "fetched_metadata"
     assert manifest.results[0].collected_records == 1
-    records_path = tmp_path / manifest.output_partition / "records" / "naver_news.jsonl"
+    records_path = tmp_path / manifest.output_partition / "records" / manifest.run_id / "naver_news.jsonl"
     assert records_path.exists()
     assert "테스트 뉴스" in records_path.read_text(encoding="utf-8")
 
@@ -121,3 +135,15 @@ def test_invalid_naver_display_rejected():
 
     with pytest.raises(ValueError, match="display"):
         client.search("경제", display=101)
+
+
+def test_naver_invalid_json_is_adapter_error(monkeypatch):
+    def fake_urlopen(request, timeout):
+        return FakeRawResponse(b"<html>not json</html>")
+
+    monkeypatch.setattr(naver_news, "urlopen", fake_urlopen)
+
+    client = NaverNewsClient(NaverNewsCredentials("client", "secret"))
+
+    with pytest.raises(NaverNewsApiError, match="invalid JSON"):
+        client.search("economy", display=1)

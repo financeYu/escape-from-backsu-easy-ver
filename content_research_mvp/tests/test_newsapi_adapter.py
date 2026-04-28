@@ -128,7 +128,7 @@ def test_collection_process_writes_newsapi_records(monkeypatch, tmp_path):
 
     assert manifest.results[0].status == "fetched_metadata"
     assert manifest.results[0].collected_records == 1
-    records_path = tmp_path / manifest.output_partition / "records" / "newsapi.jsonl"
+    records_path = tmp_path / manifest.output_partition / "records" / manifest.run_id / "newsapi.jsonl"
     assert records_path.exists()
     assert "NewsAPI Metadata Story" in records_path.read_text(encoding="utf-8")
 

@@ -130,7 +130,7 @@ def test_collection_process_writes_eia_records(monkeypatch, tmp_path):
 
     assert manifest.results[0].status == "fetched_energy_series"
     assert manifest.results[0].collected_records == 1
-    records_path = tmp_path / manifest.output_partition / "records" / "eia.jsonl"
+    records_path = tmp_path / manifest.output_partition / "records" / manifest.run_id / "eia.jsonl"
     assert records_path.exists()
     assert "WTI Crude Oil" in records_path.read_text(encoding="utf-8")
 

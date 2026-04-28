@@ -12,6 +12,7 @@ from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 
 from content_research.env import load_dotenv
+from content_research.sources.json_api import parse_json_response
 
 
 EIA_SERIESID_ENDPOINT_PREFIX = "https://api.eia.gov/v2/seriesid"
@@ -149,7 +150,7 @@ class EIAClient:
             raise EIAApiError(f"EIA HTTP {exc.code}: {_safe_error_detail(detail)}") from exc
         except URLError as exc:
             raise EIAApiError(f"EIA request failed: {exc.reason}") from exc
-        data = json.loads(body)
+        data = parse_json_response(body, "EIA API", EIAApiError)
         if not isinstance(data, dict):
             raise EIAApiError("Unexpected EIA response type.")
         _raise_if_eia_error(data)

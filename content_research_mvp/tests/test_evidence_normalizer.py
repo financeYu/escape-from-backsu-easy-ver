@@ -69,6 +69,39 @@ def test_normalize_official_data_record_preserves_value_unit_and_observation_dat
     assert candidate.confidence == 0.9
 
 
+def test_normalize_ecos_record_preserves_adapter_specific_unit_and_cycle():
+    candidate = normalize_record(
+        {
+            "source_id": "ecos",
+            "statistic_name": "Bank of Korea Base Rate",
+            "data_value": "2.50",
+            "unit_name": "%",
+            "cycle": "202604",
+            "body_collection_tier": 3,
+        }
+    )
+
+    assert candidate.title_or_indicator == "Bank of Korea Base Rate"
+    assert candidate.published_or_observed_at == "202604"
+    assert candidate.value == "2.50"
+    assert candidate.unit == "%"
+    assert candidate.confidence == 0.9
+
+
+def test_normalize_kosis_record_preserves_updated_at_and_catalog_title():
+    candidate = normalize_record(
+        {
+            "source_id": "kosis",
+            "list_name": "Population",
+            "updated_at": "20260427",
+            "body_collection_tier": 3,
+        }
+    )
+
+    assert candidate.title_or_indicator == "Population"
+    assert candidate.published_or_observed_at == "20260427"
+
+
 def test_normalize_unknown_source_marks_missing_fields_and_blocks_body_storage():
     candidate = normalize_record({"source_id": "unknown_feed", "title": "Loose item"})
 

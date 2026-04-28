@@ -385,7 +385,14 @@ class ResearchBundle:
         why_now = "\n".join(f"- {item}" for item in self.why_now)
         evidence = "\n\n".join(card.to_markdown() for card in self.evidence_cards)
         slides = "\n".join(
-            f"| {s.number} | {s.title} | {s.core_message} | {s.visual_idea} | {s.speaker_note} | {', '.join(s.source_refs)} |"
+            "| {number} | {title} | {core_message} | {visual_idea} | {speaker_note} | {source_refs} |".format(
+                number=s.number,
+                title=_markdown_table_cell(s.title),
+                core_message=_markdown_table_cell(s.core_message),
+                visual_idea=_markdown_table_cell(s.visual_idea),
+                speaker_note=_markdown_table_cell(s.speaker_note),
+                source_refs=_markdown_table_cell(", ".join(s.source_refs)),
+            )
             for s in self.slides
         )
         script = "\n\n".join(
@@ -393,7 +400,13 @@ class ResearchBundle:
             for s in self.script
         )
         risks = "\n".join(
-            f"| {r.item} | {r.problem_type} | {r.risk_level.value} | {r.recommendation} | {r.required_source} |"
+            "| {item} | {problem_type} | {risk_level} | {recommendation} | {required_source} |".format(
+                item=_markdown_table_cell(r.item),
+                problem_type=_markdown_table_cell(r.problem_type),
+                risk_level=_markdown_table_cell(r.risk_level.value),
+                recommendation=_markdown_table_cell(r.recommendation),
+                required_source=_markdown_table_cell(r.required_source),
+            )
             for r in self.risk_findings
         )
         return f"""# 유튜브 리서치 브리프
@@ -426,6 +439,12 @@ class ResearchBundle:
 |---|---|---|---|---|
 {risks}
 """
+
+
+def _markdown_table_cell(value: Any) -> str:
+    text = str(value)
+    text = text.replace("\\", "\\\\").replace("|", "\\|")
+    return "<br>".join(part.strip() for part in text.splitlines())
 
 
 def _json_default(value: Any) -> Any:
