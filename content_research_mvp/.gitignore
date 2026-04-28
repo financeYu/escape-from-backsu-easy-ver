@@ -3,6 +3,8 @@ __pycache__/
 .pytest_cache/
 .pytest-tmp/
 .pytest_tmp/
+pytest_tmp_local/
+pytest_tmp_local_*/
 pytest-cache-files-*/
 outputs/
 outputs_*/
