@@ -4,7 +4,7 @@ Korean current-affairs and economy research MVP for YouTube-style content planni
 
 This repository has two practical paths:
 
-- `content-research run`: creates a local MVP research bundle from a supplied topic without external API calls.
+- `content-research run`: runs one collection cycle and creates a local MVP research bundle from fetched Evidence records.
 - `content-research collect-once` / `collect-daemon`: runs the source collection layer for implemented MVP adapters, writes manifests and record JSONL, and leaves non-MVP catalog sources out of the Evidence pipeline.
 
 ## MVP Scope
@@ -48,14 +48,24 @@ Run the offline E2E smoke test:
 python -m pytest tests/test_content_research_e2e.py
 ```
 
-Run a local topic bundle without external API calls:
+Run a local topic bundle from one collection cycle:
 
 ```sh
 python -m content_research.cli run --topic "한국 경제 주요 이슈"
 content-research run --topic "한국 경제 주요 이슈"
 ```
 
-The `run` command writes a placeholder MVP bundle to `outputs/research_bundle.md` and `outputs/research_bundle.jsonl` unless `--output-dir` is supplied. It does not call live source APIs.
+The `run` command runs the configured MVP collection sources once, normalizes fetched record JSONL into Evidence, and writes `outputs/research_bundle.md` and `outputs/research_bundle.jsonl` unless `--output-dir` is supplied. `--topic` is treated as a requested research topic, not a latest-issue recommendation hint: only Evidence that matches the requested topic is allowed into the brief. If no Evidence records are available, the bundle reports missing credentials or adapter errors instead of fabricating sources. If Evidence exists but none of it matches `--topic`, the bundle reports a topic-mismatch status instead of substituting an unrelated issue.
+
+The generated Markdown follows the root-agent MVP architecture:
+
+1. One-line topic definition
+2. Why it matters now
+3. Ten core source materials when available
+4. PPT slide outline
+5. Shooting script
+6. Fact-check table
+7. Risk revision suggestions
 
 ## MVP Collection Sources
 
@@ -231,7 +241,7 @@ The project config sets `tests` as the pytest root and uses `src` on `pythonpath
 
 ## Known Limitations
 
-- The `run` command still produces a placeholder MVP bundle rather than a live source-backed brief.
+- The `run` command depends on API credentials and upstream availability; if no source records are fetched, it produces a collection-status bundle rather than a source-backed brief.
 - Collection is credential-dependent; missing API keys produce `missing_credentials` rows, not fetched records.
 - Non-MVP catalog sources are planning entries only and never become Evidence until promoted into the MVP source set with an implemented handler.
 - News sources are metadata/snippet only; full article text is not collected or stored.

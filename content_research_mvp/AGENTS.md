@@ -25,6 +25,18 @@ This subproject does not own:
 
 Keep responsibilities separate from `reserch_mvp`, `Quant_mvp`, and `chart_mvp`.
 
+## Python Environment
+
+Use the repository-local wrappers from the parent directory for tests and Python tooling.
+
+- Do not run bare `pytest`; PowerShell will not find the project venv executable unless the venv is activated.
+- Do not run bare `python -m pytest`; it resolves to the global Python on this machine and may fail with `No module named pytest`.
+- From the repository root, run all tests with `.\tools\run_pytest.ps1`.
+- From the repository root, pass pytest args as `.\tools\run_pytest.ps1 tests\test_models.py -q`.
+- From the repository root, run other Python module commands with `.\tools\run_python.ps1`.
+
+The wrappers set `TEMP`, `TMP`, `PIP_CACHE_DIR`, and `PYTHONUTF8` to project-local values. If bootstrap/install still hits `PermissionError`, rerun the same wrapper command with escalation rather than switching to global Python.
+
 ## Collection Policy
 
 Allowed:
@@ -62,4 +74,3 @@ Forbidden:
 7. Fact & Risk Check Agent reviews claims, numbers, bias, copyright, and policy risk.
 
 The root agent must not simply concatenate sub-agent output. It must resolve conflicts by source quality and downgrade weak claims.
-

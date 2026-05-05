@@ -35,7 +35,7 @@ def build_risk_report(cards: list[EvidenceCard], script_text: str = "") -> list[
                     item=phrase,
                     problem_type="investment_or_overclaim_language",
                     risk_level=RiskLevel.HIGH,
-                    recommendation="투자 조언 또는 단정 표현으로 읽힐 수 있으므로 가능성 중심 표현으로 바꾸세요.",
+                    recommendation="투자 조언이나 단정 표현으로 읽힐 수 있으므로 가능성 중심 표현으로 바꾸세요.",
                 )
             )
     if not findings:
@@ -44,8 +44,7 @@ def build_risk_report(cards: list[EvidenceCard], script_text: str = "") -> list[
                 item="전체",
                 problem_type="review_status",
                 risk_level=RiskLevel.LOW,
-                recommendation="초기 자동 검토에서 고위험 표현은 발견되지 않았습니다. 최종 출처 대조는 사람이 확인하세요.",
+                recommendation="자동 점검에서 고위험 표현은 발견되지 않았습니다. 최종 출처 대조는 사람이 확인하세요.",
             )
         )
     return findings
-

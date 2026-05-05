@@ -1,5 +1,6 @@
 import json
 from datetime import datetime
+from zoneinfo import ZoneInfoNotFoundError
 
 import content_research.collection.process as process_module
 from content_research.collection.catalog import CollectionSource, DEFAULT_COLLECTION_SOURCES, MVP_COLLECTION_SOURCE_IDS
@@ -34,6 +35,36 @@ def test_collect_once_writes_partitioned_manifest(tmp_path):
     assert records[1]["type"] == "source_result"
     assert records[1]["status"] == "planned_non_mvp"
     assert records[1]["rights_gate_status"] == "not_checked"
+
+
+def test_collect_once_falls_back_when_asia_seoul_tzdata_is_missing(monkeypatch, tmp_path):
+    original_zoneinfo = process_module.ZoneInfo
+
+    def missing_zoneinfo(timezone_name):
+        if timezone_name == "Asia/Seoul":
+            raise ZoneInfoNotFoundError(timezone_name)
+        return original_zoneinfo(timezone_name)
+
+    monkeypatch.setattr(process_module, "ZoneInfo", missing_zoneinfo)
+    source = CollectionSource(
+        source_id="test_source",
+        display_name="Test Source",
+        category="test",
+        adapter="test.adapter",
+        access_method="api",
+        default_body_tier=0,
+    )
+    process = HourlyCollectionProcess(output_dir=tmp_path, timezone_name="Asia/Seoul", sources=[source])
+
+    manifest, jsonl_path, markdown_path = process.run_once(
+        now=datetime(2026, 4, 27, 13, 25, 30),
+        mode="test",
+    )
+
+    assert manifest.started_at == "2026-04-27T13:25:30+09:00"
+    assert manifest.next_run_at == "2026-04-27T14:00:00+09:00"
+    assert jsonl_path.exists()
+    assert markdown_path.exists()
 
 
 def test_collect_daemon_can_run_limited_cycles_without_sleeping(tmp_path):

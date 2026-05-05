@@ -44,6 +44,7 @@ def test_research_bundle_serializes_to_jsonl_and_markdown():
 
     assert records[0]["type"] == "bundle_meta"
     assert any(record["type"] == "evidence_card" for record in records)
+    assert any(record["type"] == "fact_check" for record in records) is False
     assert "# " in bundle.to_markdown()
 
 
@@ -63,5 +64,7 @@ def test_research_bundle_markdown_escapes_table_cells():
 
     assert "A \\| B" in markdown
     assert "Line 1<br>Line 2" in markdown
+    assert "## 6. 팩트체크 표" in markdown
+    assert "## 7. 리스크 수정 제안" in markdown
     assert "item \\| x" in markdown
     assert "fix<br>now" in markdown

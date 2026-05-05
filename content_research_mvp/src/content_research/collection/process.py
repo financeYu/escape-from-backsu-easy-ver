@@ -8,12 +8,12 @@ planning result while keeping the same schedule and output contract.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 import json
 from pathlib import Path
 import time
 from typing import Any, Callable, Iterable
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from content_research.collection.catalog import CollectionSource, DEFAULT_COLLECTION_SOURCES, MVP_COLLECTION_SOURCE_IDS
 from content_research.sources.official_data.ecos import ECOSApiError, ECOSClient
@@ -36,6 +36,15 @@ ECOS_KEY_STAT_START = 1
 ECOS_KEY_STAT_END = 100
 ECOS_KEY_STAT_LANGUAGE = "kr"
 IMPLEMENTED_COLLECTION_HANDLER_IDS = MVP_COLLECTION_SOURCE_IDS
+
+
+def _load_timezone(timezone_name: str) -> ZoneInfo | timezone:
+    try:
+        return ZoneInfo(timezone_name)
+    except ZoneInfoNotFoundError:
+        if timezone_name == "Asia/Seoul":
+            return timezone(timedelta(hours=9), timezone_name)
+        raise
 
 
 @dataclass(frozen=True)
@@ -136,7 +145,7 @@ class HourlyCollectionProcess:
         self.output_dir = Path(output_dir)
         self.interval_minutes = interval_minutes
         self.timezone_name = timezone_name
-        self.timezone = ZoneInfo(timezone_name)
+        self.timezone = _load_timezone(timezone_name)
         self.sources = tuple(sources or DEFAULT_COLLECTION_SOURCES)
 
     def run_once(self, now: datetime | None = None, mode: str = "manual") -> tuple[CollectionRunManifest, Path, Path]:

@@ -58,6 +58,18 @@ class FinalFactcheckStatus(str, Enum):
     SOURCE_MORE_BEFORE_DELIVERY = "source_more_before_delivery"
 
 
+class WorkflowStage(str, Enum):
+    PENDING_REVIEW = "pending_review"
+    BLOCKED = "blocked"
+    ORCHESTRATED = "orchestrated"
+
+
+class WorkerTaskStatus(str, Enum):
+    PENDING = "pending"
+    COMPLETED = "completed"
+    BLOCKED = "blocked"
+
+
 @dataclass(frozen=True)
 class SourceRef:
     title: str
@@ -354,6 +366,18 @@ class RiskFinding:
     required_source: str = ""
 
 
+@dataclass(frozen=True)
+class WorkerInstruction:
+    task_id: str
+    worker_role: str
+    instruction: str
+    input_refs: list[str]
+    expected_output: str
+    dependencies: list[str] = field(default_factory=list)
+    status: WorkerTaskStatus = WorkerTaskStatus.PENDING
+    result_ref: str = ""
+
+
 @dataclass
 class ResearchBundle:
     topic_definition: str
@@ -364,6 +388,12 @@ class ResearchBundle:
     slides: list[SlidePlan]
     script: list[ScriptSection]
     risk_findings: list[RiskFinding]
+    fact_checks: list[FactVerificationNote] = field(default_factory=list)
+    worker_instructions: list[WorkerInstruction] = field(default_factory=list)
+    workflow_stage: WorkflowStage = WorkflowStage.PENDING_REVIEW
+    approval_required: bool = True
+    approved_by: str | None = None
+    approved_at: str | None = None
     created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat(timespec="seconds"))
 
     def to_dict(self) -> dict[str, Any]:
@@ -371,12 +401,22 @@ class ResearchBundle:
 
     def to_jsonl(self) -> str:
         records = [
-            {"type": "bundle_meta", "topic_definition": self.topic_definition, "created_at": self.created_at},
+            {
+                "type": "bundle_meta",
+                "topic_definition": self.topic_definition,
+                "created_at": self.created_at,
+                "workflow_stage": self.workflow_stage,
+                "approval_required": self.approval_required,
+                "approved_by": self.approved_by,
+                "approved_at": self.approved_at,
+            },
             *({"type": "evidence_card", **asdict(card)} for card in self.evidence_cards),
             {"type": "channel_fit", **asdict(self.channel_fit)},
             {"type": "narrative", **asdict(self.narrative)},
+            *({"type": "worker_instruction", **asdict(task)} for task in self.worker_instructions),
             *({"type": "slide", **asdict(slide)} for slide in self.slides),
             *({"type": "script", **asdict(section)} for section in self.script),
+            *({"type": "fact_check", **asdict(note)} for note in self.fact_checks),
             *({"type": "risk_finding", **asdict(finding)} for finding in self.risk_findings),
         ]
         return "\n".join(json.dumps(record, ensure_ascii=False, default=_json_default) for record in records)
@@ -399,17 +439,50 @@ class ResearchBundle:
             f"### [슬라이드 {s.slide_number}] {s.section}\n\n{s.narration}\n\n자막: {s.caption}"
             for s in self.script
         )
+        fact_checks = "\n".join(
+            "| {claim} | {status} | {source} | {unit_and_date} | {note} |".format(
+                claim=_markdown_table_cell(note.claim_or_number),
+                status=_markdown_table_cell(note.status.value),
+                source=_markdown_table_cell(note.source),
+                unit_and_date=_markdown_table_cell(note.unit_and_date),
+                note=_markdown_table_cell(note.note),
+            )
+            for note in self.fact_checks
+        )
         risks = "\n".join(
-            "| {item} | {problem_type} | {risk_level} | {recommendation} | {required_source} |".format(
+            "| {item} | {problem_type} | {recommendation} | {risk_level} | {required_source} |".format(
                 item=_markdown_table_cell(r.item),
                 problem_type=_markdown_table_cell(r.problem_type),
-                risk_level=_markdown_table_cell(r.risk_level.value),
                 recommendation=_markdown_table_cell(r.recommendation),
+                risk_level=_markdown_table_cell(r.risk_level.value),
                 required_source=_markdown_table_cell(r.required_source),
             )
             for r in self.risk_findings
         )
+        worker_instructions = "\n".join(
+            "| {task_id} | {worker_role} | {status} | {dependencies} | {input_refs} | {expected_output} | {result_ref} |".format(
+                task_id=_markdown_table_cell(task.task_id),
+                worker_role=_markdown_table_cell(task.worker_role),
+                status=_markdown_table_cell(task.status.value),
+                dependencies=_markdown_table_cell(", ".join(task.dependencies) or "-"),
+                input_refs=_markdown_table_cell(", ".join(task.input_refs)),
+                expected_output=_markdown_table_cell(task.expected_output),
+                result_ref=_markdown_table_cell(task.result_ref or "-"),
+            )
+            for task in self.worker_instructions
+        )
         return f"""# 유튜브 리서치 브리프
+
+승인 상태: {self.workflow_stage.value}
+승인 필요: {"예" if self.approval_required else "아니오"}
+승인자: {self.approved_by or "-"}
+승인 시각: {self.approved_at or "-"}
+
+## 오케스트라 워커 지시
+
+| task_id | worker_role | status | dependencies | input_refs | expected_output | result_ref |
+|---|---|---|---|---|---|---|
+{worker_instructions or "| - | 사용자 승인 대기 | pending | - | plan_review | 승인 후 워커 지시 생성 | - |"}
 
 ## 1. 한 줄 주제 정의
 
@@ -419,7 +492,7 @@ class ResearchBundle:
 
 {why_now}
 
-## 3. 핵심 자료
+## 3. 핵심 자료 10개
 
 {evidence}
 
@@ -427,15 +500,21 @@ class ResearchBundle:
 
 | 슬라이드 | 제목 | 핵심 메시지 | 시각자료 | 발표자 노트 | 출처 |
 |---:|---|---|---|---|---|
-{slides}
+{slides or "| - | 사용자 승인 대기 | 플랜리뷰 승인 후 생성 | - | - | - |"}
 
 ## 5. 촬영 대본
 
-{script}
+{script or "사용자 승인 후 생성됩니다."}
 
 ## 6. 팩트체크 표
 
-| 항목 | 문제 유형 | 위험도 | 수정 제안 | 필요한 출처 |
+| 주장/숫자 | 검증 결과 | 출처 | 기준일 | 표현 수정 여부 |
+|---|---|---|---|---|
+{fact_checks or "| 전체 | unchecked | 추가 출처 대조 필요 |  | 최종 검토 전 |"}
+
+## 7. 리스크 수정 제안
+
+| 위험 표현 | 문제 | 수정안 | 위험도 | 필요한 출처 |
 |---|---|---|---|---|
 {risks}
 """
